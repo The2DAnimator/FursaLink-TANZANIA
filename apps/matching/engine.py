@@ -1,23 +1,6 @@
-"""Buyer-seller matching and recommendation engine.
-
-Uses TF-IDF + cosine similarity over textual attributes (name, description,
-category, location) to recommend products/opportunities/jobs and to match
-buyers with sellers. The implementation degrades gracefully: if scikit-learn
-is unavailable it falls back to a keyword-overlap score, so the API always
-returns results.
-"""
+"""Buyer-seller matching and recommendation engine."""
 from __future__ import annotations
-
 from dataclasses import dataclass
-
-try:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.metrics.pairwise import cosine_similarity
-
-    _HAS_SKLEARN = True
-except Exception:  # pragma: no cover - optional dependency
-    _HAS_SKLEARN = False
-
 
 @dataclass
 class Candidate:
@@ -33,19 +16,31 @@ def _keyword_overlap(query: str, text: str) -> float:
     return len(q & t) / len(q | t)
 
 
-def rank(query: str, candidates: list[Candidate], top_n: int = 10) -> list[tuple[int, float]]:
-    """Return [(obj_id, score)] ranked by similarity to ``query``."""
+def _get_sklearn():
+    """Lazy import sklearn so Django startup is fast."""
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        return TfidfVectorizer, cosine_similarity
+    except Exception:
+        return None, None
+
+
+def rank(query: str, candidates: list[Candidate], top_n: int = 10):
     if not candidates:
         return []
-    if _HAS_SKLEARN:
-        corpus = [query] + [c.text for c in candidates]
-        vectorizer = TfidfVectorizer(stop_words="english")
+
+    TfidfVectorizer, cosine_similarity = _get_sklearn()
+
+    if TfidfVectorizer and cosine_similarity:
         try:
+            corpus = [query] + [c.text for c in candidates]
+            vectorizer = TfidfVectorizer(stop_words="english")
             matrix = vectorizer.fit_transform(corpus)
             sims = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
-        except ValueError:
+        except Exception:
             sims = [_keyword_overlap(query, c.text) for c in candidates]
-    else:  # pragma: no cover
+    else:
         sims = [_keyword_overlap(query, c.text) for c in candidates]
 
     scored = sorted(
@@ -53,21 +48,24 @@ def rank(query: str, candidates: list[Candidate], top_n: int = 10) -> list[tuple
         key=lambda x: x[1],
         reverse=True,
     )
+
     return [s for s in scored if s[1] > 0][:top_n]
 
 
 SPAM_TOKENS = {
-    "free money", "click here", "winner", "lottery", "viagra", "bitcoin doubler",
-    "100% free", "act now", "wire transfer", "nigerian prince",
+    "free money", "click here", "winner", "lottery", "viagra",
+    "bitcoin doubler", "100% free", "act now", "wire transfer",
+    "nigerian prince",
 }
 
 
 def spam_score(text: str) -> float:
-    """Return a 0-1 heuristic spam score for moderation."""
     if not text:
         return 0.0
+
     lowered = text.lower()
     hits = sum(1 for token in SPAM_TOKENS if token in lowered)
     excess_caps = sum(1 for ch in text if ch.isupper()) / max(len(text), 1)
+
     score = min(hits * 0.3 + (0.3 if excess_caps > 0.5 else 0), 1.0)
     return round(score, 2)
