@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Opportunities · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 fw-bold mb-3">Market Opportunities</h1>
+  <div class="row g-2 mb-3">
+    <div class="col-md-4"><input class="form-control" id="f-search" placeholder="Search opportunities..."></div>
+    <div class="col-md-3"><select class="form-select" id="f-type"><option value="">All types</option>
+      <option value="supply">Supply Request</option><option value="buyer">Buyer Request</option>
+      <option value="investment">Investment</option><option value="partnership">Partnership</option>
+      <option value="distribution">Distribution</option></select></div>
+    <div class="col-md-3"><input class="form-control" id="f-industry" placeholder="Industry"></div>
+    <div class="col-md-2 d-grid"><button class="btn btn-success" id="f-apply">Filter</button></div>
+  </div>
+  <div class="row g-3" id="list"></div>
+  <nav class="mt-3"><ul class="pagination justify-content-center" id="pager"></ul></nav>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/listing.js"></script>
+<script>
+let page = 1;
+async function load() {
+  const target = document.getElementById("list"); FLUI.spinner(target);
+  const params = { page, search: document.getElementById("f-search").value,
+    type: document.getElementById("f-type").value, industry: document.getElementById("f-industry").value };
+  const data = await FL.request("/opportunities/" + FLUI.qs(params), { auth: false });
+  if (!data.results.length) return FLUI.empty(target);
+  target.innerHTML = data.results.map(card).join("");
+  data.current = page; renderPager("pager", data, (p) => { page = p; load(); });
+}
+function card(o) {
+  const budget = (o.budget_min || o.budget_max) ? `${FLUI.money(o.budget_min, o.currency)} – ${FLUI.money(o.budget_max, o.currency)}` : 'Negotiable';
+  return `<div class="col-md-6"><div class="card card-listing h-100 shadow-sm"><div class="card-body">
+    <div class="d-flex justify-content-between"><span class="badge bg-success-subtle text-success">${FLUI.escape(o.type_display)}</span>
+    ${o.deadline?`<small class="text-muted">Closes ${o.deadline}</small>`:''}</div>
+    <h5 class="h6 mt-2">${FLUI.escape(o.title)}</h5>
+    <p class="small text-muted mb-1">${FLUI.escape(o.industry||'')} ${o.location?'· '+FLUI.escape(o.location):''}</p>
+    <p class="small">${FLUI.escape((o.description||'').slice(0,160))}</p>
+    <div class="small fw-semibold text-success">Budget: ${budget}</div>
+  </div></div></div>`;
+}
+document.getElementById("f-apply").addEventListener("click", () => { page = 1; load(); });
+load();
+</script>
+{% endblock %}

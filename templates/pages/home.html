@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero py-5">
+  <div class="container py-4">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <h1 class="display-5 fw-bold">Find opportunities. Grow your business.</h1>
+        <p class="lead">FursaLink Tanzania connects businesses, buyers, sellers, farmers, traders, job seekers and investors with verified opportunities, market prices, tenders and jobs across Tanzania.</p>
+        <form class="row g-2 mt-2" id="hero-search">
+          <div class="col-sm-8"><input class="form-control form-control-lg" name="q" placeholder="Search businesses, products, opportunities..."></div>
+          <div class="col-sm-4 d-grid"><button class="btn btn-light btn-lg fw-semibold">Search</button></div>
+        </form>
+      </div>
+      <div class="col-lg-5 text-center d-none d-lg-block">
+        <i class="bi bi-graph-up-arrow" style="font-size:11rem;opacity:.85"></i>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="container py-5">
+  <div class="row text-center g-3" id="home-stats">
+    <div class="col-6 col-md-3"><div class="card stat-card shadow-sm"><div class="card-body"><h3 class="text-success mb-0" data-stat="businesses">—</h3><small class="text-muted">Businesses</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card shadow-sm"><div class="card-body"><h3 class="text-success mb-0" data-stat="products">—</h3><small class="text-muted">Products</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card shadow-sm"><div class="card-body"><h3 class="text-success mb-0" data-stat="opportunities">—</h3><small class="text-muted">Opportunities</small></div></div></div>
+    <div class="col-6 col-md-3"><div class="card stat-card shadow-sm"><div class="card-body"><h3 class="text-success mb-0" data-stat="jobs">—</h3><small class="text-muted">Jobs</small></div></div></div>
+  </div>
+</section>
+
+<section class="container pb-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 fw-bold mb-0">Featured Businesses</h2>
+    <a href="/businesses/" class="btn btn-sm btn-outline-success">View all</a>
+  </div>
+  <div class="row g-3" id="featured-businesses"></div>
+</section>
+
+<section class="container pb-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 fw-bold mb-0">Latest Opportunities</h2>
+    <a href="/opportunities/" class="btn btn-sm btn-outline-success">View all</a>
+  </div>
+  <div class="row g-3" id="latest-opportunities"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("hero-search").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = e.target.q.value.trim();
+  window.location.href = "/products/" + FLUI.qs({ search: q });
+});
+
+async function loadHome() {
+  try {
+    const [biz, prod, opp, jobs] = await Promise.all([
+      FL.request("/businesses/?page_size=6&is_featured=true", { auth: false }),
+      FL.request("/products/?page_size=1", { auth: false }),
+      FL.request("/opportunities/?page_size=6", { auth: false }),
+      FL.request("/jobs/?page_size=1", { auth: false }),
+    ]);
+    const stats = { businesses: biz.count, products: prod.count, opportunities: opp.count, jobs: jobs.count };
+    Object.entries(stats).forEach(([k, v]) =>
+      document.querySelector(`[data-stat="${k}"]`).textContent = (v ?? 0).toLocaleString());
+
+    const fb = document.getElementById("featured-businesses");
+    let featured = biz.results;
+    if (!featured.length) featured = (await FL.request("/businesses/?page_size=6", { auth: false })).results;
+    fb.innerHTML = featured.map(businessCard).join("") || emptyCol("No businesses yet.");
+
+    const lo = document.getElementById("latest-opportunities");
+    lo.innerHTML = opp.results.map(oppCard).join("") || emptyCol("No opportunities yet.");
+  } catch (err) { console.error(err); }
+}
+
+function emptyCol(msg) { return `<div class="col-12"><div class="alert alert-light border text-center">${msg}</div></div>`; }
+
+function businessCard(b) {
+  return `<div class="col-sm-6 col-lg-4"><div class="card card-listing h-100 shadow-sm">
+    <img class="card-img-top" src="${b.cover_image || 'https://placehold.co/600x300/eef2ee/1f8a4c?text=FursaLink'}" alt="">
+    <div class="card-body">
+      <div class="d-flex justify-content-between"><h5 class="card-title h6">${FLUI.escape(b.name)}</h5>
+      ${b.is_featured ? '<span class="badge badge-featured">Featured</span>' : ''}</div>
+      <p class="small text-muted mb-1">${FLUI.escape(b.category_name || 'General')} · ${FLUI.escape(b.region_name || 'Tanzania')}</p>
+      <p class="small text-truncate-2">${FLUI.escape((b.description||'').slice(0,90))}</p>
+      <a class="btn btn-sm btn-outline-success" href="/businesses/${b.slug}/">View</a>
+    </div></div></div>`;
+}
+
+function oppCard(o) {
+  return `<div class="col-sm-6 col-lg-4"><div class="card card-listing h-100 shadow-sm"><div class="card-body">
+    <span class="badge bg-success-subtle text-success mb-2">${FLUI.escape(o.type_display)}</span>
+    <h5 class="h6">${FLUI.escape(o.title)}</h5>
+    <p class="small text-muted mb-1">${FLUI.escape(o.industry || '')} ${o.location ? '· ' + FLUI.escape(o.location) : ''}</p>
+    <p class="small">${FLUI.escape((o.description||'').slice(0,100))}</p>
+  </div></div></div>`;
+}
+loadHome();
+</script>
+{% endblock %}

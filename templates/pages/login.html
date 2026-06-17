@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Login · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width:420px">
+  <div class="card shadow-sm"><div class="card-body p-4">
+    <h1 class="h4 fw-bold mb-3">Welcome back</h1>
+    <div class="alert alert-danger d-none" id="err"></div>
+    <form id="login-form">
+      <div class="mb-3"><label class="form-label">Email</label><input type="email" class="form-control" name="email" required></div>
+      <div class="mb-3"><label class="form-label">Password</label><input type="password" class="form-control" name="password" required></div>
+      <button class="btn btn-success w-100">Login</button>
+    </form>
+    <p class="small mt-3 mb-0">No account? <a href="/register/">Sign up</a></p>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+if (FL.isAuthenticated()) window.location.href = "/dashboard/";
+document.getElementById("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = document.getElementById("err"); err.classList.add("d-none");
+  try {
+    await FL.login(e.target.email.value, e.target.password.value);
+    window.location.href = "/dashboard/";
+  } catch (ex) {
+    err.textContent = ex.data?.detail || "Invalid credentials.";
+    err.classList.remove("d-none");
+  }
+});
+</script>
+{% endblock %}
