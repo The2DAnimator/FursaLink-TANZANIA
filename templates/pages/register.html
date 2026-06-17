@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Sign up · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width:520px">
+  <div class="card shadow-sm"><div class="card-body p-4">
+    <h1 class="h4 fw-bold mb-3">Create your account</h1>
+    <div class="alert alert-danger d-none" id="err"></div>
+    <div class="alert alert-success d-none" id="ok"></div>
+    <form id="reg-form">
+      <div class="row g-2">
+        <div class="col-md-6 mb-2"><label class="form-label">First name</label><input class="form-control" name="first_name"></div>
+        <div class="col-md-6 mb-2"><label class="form-label">Last name</label><input class="form-control" name="last_name"></div>
+      </div>
+      <div class="mb-2"><label class="form-label">Email</label><input type="email" class="form-control" name="email" required></div>
+      <div class="mb-2"><label class="form-label">Phone</label><input class="form-control" name="phone" placeholder="+255..."></div>
+      <div class="mb-2"><label class="form-label">I am a</label><select class="form-select" name="role">
+        <option value="buyer">Buyer</option><option value="seller">Seller</option>
+        <option value="business_owner">Business Owner</option><option value="job_seeker">Job Seeker</option></select></div>
+      <div class="row g-2">
+        <div class="col-md-6 mb-3"><label class="form-label">Password</label><input type="password" class="form-control" name="password" required></div>
+        <div class="col-md-6 mb-3"><label class="form-label">Confirm</label><input type="password" class="form-control" name="password_confirm" required></div>
+      </div>
+      <button class="btn btn-success w-100">Sign up</button>
+    </form>
+    <p class="small mt-3 mb-0">Already have an account? <a href="/login/">Login</a></p>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("reg-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target, err = document.getElementById("err"), ok = document.getElementById("ok");
+  err.classList.add("d-none"); ok.classList.add("d-none");
+  const body = { first_name: f.first_name.value, last_name: f.last_name.value, email: f.email.value,
+    phone: f.phone.value, role: f.role.value, password: f.password.value, password_confirm: f.password_confirm.value };
+  try {
+    await FL.post("/auth/register/", body, { auth: false });
+    ok.textContent = "Account created! Check your email to verify, then log in.";
+    ok.classList.remove("d-none"); f.reset();
+    setTimeout(() => window.location.href = "/login/", 2500);
+  } catch (ex) {
+    err.textContent = Object.entries(ex.data || {}).map(([k, v]) => `${k}: ${v}`).join(" ") || "Registration failed.";
+    err.classList.remove("d-none");
+  }
+});
+</script>
+{% endblock %}
