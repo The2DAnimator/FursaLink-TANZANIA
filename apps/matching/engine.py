@@ -1,6 +1,5 @@
-"""Buyer-seller matching and recommendation engine."""
-from __future__ import annotations
 from dataclasses import dataclass
+
 
 @dataclass
 class Candidate:
@@ -16,8 +15,7 @@ def _keyword_overlap(query: str, text: str) -> float:
     return len(q & t) / len(q | t)
 
 
-def _get_sklearn():
-    """Lazy import sklearn so Django startup is fast."""
+def _use_sklearn():
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.metrics.pairwise import cosine_similarity
@@ -30,12 +28,12 @@ def rank(query: str, candidates: list[Candidate], top_n: int = 10):
     if not candidates:
         return []
 
-    TfidfVectorizer, cosine_similarity = _get_sklearn()
+    Vectorizer, cosine_similarity = _use_sklearn()
 
-    if TfidfVectorizer and cosine_similarity:
+    if Vectorizer:
+        corpus = [query] + [c.text for c in candidates]
         try:
-            corpus = [query] + [c.text for c in candidates]
-            vectorizer = TfidfVectorizer(stop_words="english")
+            vectorizer = Vectorizer(stop_words="english")
             matrix = vectorizer.fit_transform(corpus)
             sims = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
         except Exception:
@@ -44,7 +42,7 @@ def rank(query: str, candidates: list[Candidate], top_n: int = 10):
         sims = [_keyword_overlap(query, c.text) for c in candidates]
 
     scored = sorted(
-        ((c.obj_id, float(score)) for c, score in zip(candidates, sims, strict=False)),
+        ((c.obj_id, float(score)) for c, score in zip(candidates, sims)),
         key=lambda x: x[1],
         reverse=True,
     )
@@ -65,7 +63,7 @@ def spam_score(text: str) -> float:
 
     lowered = text.lower()
     hits = sum(1 for token in SPAM_TOKENS if token in lowered)
-    excess_caps = sum(1 for ch in text if ch.isupper()) / max(len(text), 1)
+    caps_ratio = sum(1 for c in text if c.isupper()) / max(len(text), 1)
 
-    score = min(hits * 0.3 + (0.3 if excess_caps > 0.5 else 0), 1.0)
+    score = min(hits * 0.3 + (0.3 if caps_ratio > 0.5 else 0), 1.0)
     return round(score, 2)
