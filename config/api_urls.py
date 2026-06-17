@@ -1,4 +1,5 @@
 """Versioned REST API URL configuration (mounted under /api/v1/)."""
+
 from django.urls import include, path
 
 urlpatterns = [
