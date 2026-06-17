@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tenders · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 fw-bold mb-3">Tenders</h1>
+  <div class="row g-2 mb-3">
+    <div class="col-md-5"><input class="form-control" id="f-search" placeholder="Search tenders..."></div>
+    <div class="col-md-4"><select class="form-select" id="f-sector"><option value="">All sectors</option>
+      <option value="government">Government</option><option value="ngo">NGO</option><option value="private">Private</option></select></div>
+    <div class="col-md-3 d-grid"><button class="btn btn-success" id="f-apply">Filter</button></div>
+  </div>
+  <div class="table-responsive"><table class="table table-hover align-middle">
+    <thead><tr><th>Organization</th><th>Tender No.</th><th>Title</th><th>Sector</th><th>Closing</th><th></th></tr></thead>
+    <tbody id="list"></tbody></table></div>
+  <nav><ul class="pagination justify-content-center" id="pager"></ul></nav>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/listing.js"></script>
+<script>
+let page = 1;
+async function load() {
+  const tb = document.getElementById("list");
+  tb.innerHTML = `<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-success"></div></td></tr>`;
+  const params = { page, search: document.getElementById("f-search").value, sector: document.getElementById("f-sector").value };
+  const data = await FL.request("/tenders/" + FLUI.qs(params), { auth: false });
+  if (!data.results.length) { tb.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">No tenders found.</td></tr>`; return; }
+  tb.innerHTML = data.results.map(t => `<tr>
+    <td>${FLUI.escape(t.organization)}</td><td><code>${FLUI.escape(t.tender_number)}</code></td>
+    <td>${FLUI.escape(t.title)}</td><td><span class="badge bg-success-subtle text-success">${FLUI.escape(t.sector_display)}</span></td>
+    <td>${t.closing_date||'—'}</td>
+    <td>${t.documents_url?`<a class="btn btn-sm btn-outline-success" href="${t.documents_url}" target="_blank">Docs</a>`:''}</td></tr>`).join("");
+  data.current = page; renderPager("pager", data, (p) => { page = p; load(); });
+}
+document.getElementById("f-apply").addEventListener("click", () => { page = 1; load(); });
+load();
+</script>
+{% endblock %}

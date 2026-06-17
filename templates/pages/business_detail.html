@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container py-4" id="biz-root">
+  <div id="biz-detail"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const slug = window.location.pathname.split("/").filter(Boolean).pop();
+async function load() {
+  const root = document.getElementById("biz-detail");
+  FLUI.spinner(root);
+  let b;
+  try { b = await FL.request(`/businesses/${slug}/view/`, { auth: false }); }
+  catch { return FLUI.empty(root, "Business not found."); }
+  const reviews = await FL.request(`/reviews/?business=${b.id}`, { auth: false });
+  root.innerHTML = `
+    <img class="w-100 cover-thumb rounded mb-3" src="${b.cover_image || 'https://placehold.co/1200x300/eef2ee/1f8a4c?text=FursaLink'}">
+    <div class="d-flex align-items-start gap-3">
+      <img class="logo-thumb shadow-sm" src="${b.logo || 'https://placehold.co/120x120/ffffff/1f8a4c?text=Logo'}">
+      <div class="flex-grow-1">
+        <h1 class="h3 mb-1">${FLUI.escape(b.name)} ${b.verification_status==='verified'?'<i class="bi bi-patch-check-fill text-success"></i>':''}</h1>
+        <p class="text-muted mb-1">${FLUI.escape(b.category_name||'General')} · ${FLUI.escape(b.region_name||'Tanzania')}</p>
+        <div>★ ${b.average_rating} <span class="text-muted">(${b.reviews_count} reviews)</span> · <i class="bi bi-eye"></i> ${b.views_count}</div>
+      </div>
+      <button class="btn btn-success" id="connect-btn"><i class="bi bi-send"></i> Request connection</button>
+    </div>
+    <div class="row mt-4 g-4">
+      <div class="col-lg-8">
+        <h5>About</h5><p>${FLUI.escape(b.description||'No description provided.')}</p>
+        <h5 class="mt-4">Reviews</h5>
+        <div id="reviews">${reviews.results.map(r=>`<div class="border rounded p-2 mb-2"><strong>${FLUI.escape(r.user_name)}</strong> · ★ ${r.rating}<div class="small">${FLUI.escape(r.comment||'')}</div></div>`).join('') || '<p class="text-muted small">No reviews yet.</p>'}</div>
+        <form id="review-form" class="border rounded p-3 mt-3 ${FL.isAuthenticated()?'':'d-none'}">
+          <h6>Leave a review</h6>
+          <select class="form-select form-select-sm mb-2" name="rating">${[5,4,3,2,1].map(n=>`<option value="${n}">${n} ★</option>`).join('')}</select>
+          <textarea class="form-control form-control-sm mb-2" name="comment" placeholder="Your experience..."></textarea>
+          <button class="btn btn-sm btn-success">Submit review</button>
+        </form>
+      </div>
+      <div class="col-lg-4">
+        <div class="card shadow-sm"><div class="card-body">
+          <h6 class="fw-bold">Contact</h6>
+          <ul class="list-unstyled small mb-0">
+            ${b.address?`<li><i class="bi bi-geo-alt"></i> ${FLUI.escape(b.address)}</li>`:''}
+            ${b.website?`<li><i class="bi bi-globe"></i> <a href="${b.website}" target="_blank">Website</a></li>`:''}
+            ${b.email?`<li><i class="bi bi-envelope"></i> ${FLUI.escape(b.email)}</li>`:''}
+            <li class="text-muted mt-2"><i class="bi bi-shield-lock"></i> Phone shared only after a connection request is accepted.</li>
+          </ul>
+        </div></div>
+        <div id="map-card" class="card shadow-sm mt-3 ${b.latitude?'':'d-none'}"><div class="card-body p-0">
+          <iframe class="w-100 rounded" height="200" style="border:0" loading="lazy"
+            src="https://www.google.com/maps?q=${b.latitude},${b.longitude}&output=embed"></iframe>
+        </div></div>
+      </div>
+    </div>`;
+
+  document.getElementById("connect-btn").addEventListener("click", async () => {
+    if (!FL.isAuthenticated()) return window.location.href = "/login/";
+    try {
+      await FL.post("/leads/", { business: b.id, type: "buyer", message: "I'm interested in connecting." });
+      FLUI.toast("Connection request sent. The business will reach out via the platform.");
+    } catch { FLUI.toast("Could not send request.", "danger"); }
+  });
+  const rf = document.getElementById("review-form");
+  if (rf) rf.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await FL.post("/reviews/", { business: b.id, rating: +rf.rating.value, comment: rf.comment.value });
+      FLUI.toast("Review submitted."); load();
+    } catch (err) { FLUI.toast("You may have already reviewed this business.", "danger"); }
+  });
+}
+load();
+</script>
+{% endblock %}

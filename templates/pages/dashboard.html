@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 fw-bold mb-0">Dashboard</h1>
+    <span class="text-muted" id="welcome"></span>
+  </div>
+
+  <div class="row g-3 mb-4" id="stats"></div>
+
+  <div class="row g-4">
+    <div class="col-lg-7"><div class="card shadow-sm"><div class="card-body">
+      <h6 class="fw-bold">Revenue trend</h6><canvas id="revChart" height="150"></canvas></div></div></div>
+    <div class="col-lg-5"><div class="card shadow-sm"><div class="card-body">
+      <h6 class="fw-bold">Notifications</h6><div id="notifs" class="small"></div></div></div></div>
+  </div>
+
+  <div class="row g-4 mt-1">
+    <div class="col-lg-6"><div class="card shadow-sm"><div class="card-body">
+      <h6 class="fw-bold">Add a business</h6>
+      <form id="biz-form" class="row g-2">
+        <div class="col-12"><input class="form-control form-control-sm" name="name" placeholder="Business name" required></div>
+        <div class="col-12"><textarea class="form-control form-control-sm" name="description" placeholder="Description"></textarea></div>
+        <div class="col-6"><input class="form-control form-control-sm" name="phone" placeholder="Phone"></div>
+        <div class="col-6"><input class="form-control form-control-sm" name="email" placeholder="Email"></div>
+        <div class="col-12 d-grid"><button class="btn btn-success btn-sm">Create</button></div>
+      </form></div></div></div>
+
+    <div class="col-lg-6" id="products"><div class="card shadow-sm"><div class="card-body">
+      <h6 class="fw-bold">Add a product</h6>
+      <form id="prod-form" class="row g-2">
+        <div class="col-12"><input class="form-control form-control-sm" name="name" placeholder="Product name" required></div>
+        <div class="col-6"><input type="number" step="0.01" class="form-control form-control-sm" name="price" placeholder="Price" required></div>
+        <div class="col-6"><input type="number" class="form-control form-control-sm" name="quantity" placeholder="Quantity" value="1"></div>
+        <div class="col-12"><textarea class="form-control form-control-sm" name="description" placeholder="Description"></textarea></div>
+        <div class="col-12 d-grid"><button class="btn btn-success btn-sm">List product</button></div>
+      </form></div></div></div>
+  </div>
+
+  <div class="row g-4 mt-1">
+    <div class="col-12"><div class="card shadow-sm"><div class="card-body">
+      <div class="d-flex justify-content-between"><h6 class="fw-bold">My leads</h6></div>
+      <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Business</th><th>Type</th><th>Status</th><th>Score</th></tr></thead>
+      <tbody id="leads"></tbody></table></div>
+    </div></div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+if (!FL.isAuthenticated()) window.location.href = "/login/";
+let revChart;
+async function init() {
+  const me = await FL.me();
+  document.getElementById("welcome").textContent = `${me.full_name || me.email} · ${me.role}`;
+  const overview = await FL.get("/analytics/overview/");
+  const cards = [
+    ["Business views", overview.business_views], ["Product views", overview.product_views],
+    ["Leads", overview.leads_generated], ["Applications", overview.applications],
+    ["Businesses", overview.businesses], ["Revenue", FLUI.money(overview.revenue)],
+  ];
+  document.getElementById("stats").innerHTML = cards.map(([t, v]) =>
+    `<div class="col-6 col-md-4 col-lg-2"><div class="card stat-card shadow-sm"><div class="card-body py-2">
+      <div class="h5 mb-0 text-success">${v}</div><small class="text-muted">${t}</small></div></div></div>`).join("");
+
+  const rev = await FL.get("/analytics/revenue-trend/");
+  revChart = new Chart(document.getElementById("revChart"), { type: "line", data: {
+    labels: rev.map(r => r.month), datasets: [{ label: "Revenue", data: rev.map(r => r.total), borderColor: "#1f8a4c", tension: .3 }] },
+    options: { plugins: { legend: { display: false } } } });
+
+  const notifs = await FL.get("/notifications/?page_size=6");
+  document.getElementById("notifs").innerHTML = notifs.results.map(n =>
+    `<div class="border-bottom py-1"><strong>${FLUI.escape(n.title)}</strong><div class="text-muted">${FLUI.escape(n.body||'')}</div></div>`).join("")
+    || '<p class="text-muted mb-0">No notifications.</p>';
+
+  const leads = await FL.get("/leads/?page_size=10");
+  document.getElementById("leads").innerHTML = leads.results.map(l =>
+    `<tr><td>${FLUI.escape(l.business_name)}</td><td>${FLUI.escape(l.type_display)}</td><td>${l.status}</td><td>${l.score}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="text-muted text-center">No leads yet.</td></tr>';
+}
+document.getElementById("biz-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); const f = e.target;
+  try { await FL.post("/businesses/", { name: f.name.value, description: f.description.value, phone: f.phone.value, email: f.email.value });
+    FLUI.toast("Business created (pending verification)."); f.reset(); } catch { FLUI.toast("Failed.", "danger"); }
+});
+document.getElementById("prod-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); const f = e.target;
+  try { await FL.post("/products/", { name: f.name.value, price: f.price.value, quantity: +f.quantity.value, description: f.description.value });
+    FLUI.toast("Product listed."); f.reset(); } catch { FLUI.toast("Failed.", "danger"); }
+});
+init();
+</script>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Market Prices · {{ SITE_NAME }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="h3 fw-bold mb-3">Market Price Intelligence</h1>
+  <div class="row g-2 mb-3">
+    <div class="col-md-3"><input class="form-control" id="f-product" placeholder="Product e.g. Maize"></div>
+    <div class="col-md-3"><select class="form-select" id="f-category"><option value="">All categories</option>
+      <option value="crops">Crops</option><option value="livestock">Livestock</option>
+      <option value="building_materials">Building Materials</option><option value="fuel">Fuel</option><option value="electronics">Electronics</option></select></div>
+    <div class="col-md-3"><select class="form-select" id="f-region"><option value="">All regions</option></select></div>
+    <div class="col-md-3 d-grid"><button class="btn btn-success" id="f-apply">Apply</button></div>
+  </div>
+  <div class="row g-3">
+    <div class="col-lg-7"><div class="card shadow-sm"><div class="card-body"><h6 class="fw-bold">Price Trend</h6><canvas id="trendChart" height="160"></canvas></div></div></div>
+    <div class="col-lg-5"><div class="card shadow-sm"><div class="card-body"><h6 class="fw-bold">Regional Comparison</h6><canvas id="regionChart" height="160"></canvas></div></div></div>
+  </div>
+  <div class="table-responsive mt-3"><table class="table table-sm table-hover">
+    <thead><tr><th>Product</th><th>Category</th><th>Market</th><th>Price</th><th>Unit</th><th>Date</th></tr></thead>
+    <tbody id="list"></tbody></table></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let trendChart, regionChart;
+async function loadRegions() {
+  const r = await FL.request("/regions/?page_size=100", { auth: false });
+  r.results.forEach(x => document.getElementById("f-region").insertAdjacentHTML("beforeend", `<option value="${x.id}">${FLUI.escape(x.name)}</option>`));
+}
+function params() {
+  return { product: document.getElementById("f-product").value, category: document.getElementById("f-category").value, region: document.getElementById("f-region").value };
+}
+async function load() {
+  const [prices, trends, regional] = await Promise.all([
+    FL.request("/market-prices/" + FLUI.qs({ ...params(), page_size: 25 }), { auth: false }),
+    FL.request("/market-prices/trends/" + FLUI.qs(params()), { auth: false }),
+    FL.request("/market-prices/regional-comparison/" + FLUI.qs(params()), { auth: false }),
+  ]);
+  const tb = document.getElementById("list");
+  tb.innerHTML = prices.results.map(p => `<tr><td>${FLUI.escape(p.product)}</td><td>${FLUI.escape(p.category_display)}</td>
+    <td>${FLUI.escape(p.market_name)}</td><td>${FLUI.money(p.price, p.currency)}</td><td>${FLUI.escape(p.unit)}</td><td>${p.date}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="text-center text-muted py-3">No price data. Try seeding data.</td></tr>`;
+  drawTrend(trends); drawRegion(regional);
+}
+function drawTrend(data) {
+  const ctx = document.getElementById("trendChart");
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, { type: "line", data: {
+    labels: data.map(d => d.date),
+    datasets: [
+      { label: "Avg", data: data.map(d => d.avg_price), borderColor: "#1f8a4c", tension: .3 },
+      { label: "Min", data: data.map(d => d.min_price), borderColor: "#9bd1b0", tension: .3 },
+      { label: "Max", data: data.map(d => d.max_price), borderColor: "#f4a261", tension: .3 },
+    ] }, options: { responsive: true, plugins: { legend: { position: "bottom" } } } });
+}
+function drawRegion(data) {
+  const ctx = document.getElementById("regionChart");
+  if (regionChart) regionChart.destroy();
+  regionChart = new Chart(ctx, { type: "bar", data: {
+    labels: data.map(d => d.region || "—"),
+    datasets: [{ label: "Avg price", data: data.map(d => d.avg_price), backgroundColor: "#1f8a4c" }],
+  }, options: { plugins: { legend: { display: false } } } });
+}
+document.getElementById("f-apply").addEventListener("click", load);
+loadRegions(); load();
+</script>
+{% endblock %}
